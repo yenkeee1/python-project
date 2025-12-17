@@ -1,39 +1,31 @@
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from app.db.db import engine
+from app.db import models
+from app.api import categories, books
 
-from db.db import SessionLocal
-from db.crud import get_categories, get_books_by_category
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    models.Base.metadata.create_all(bind=engine)
+    print("Database tables created")
+    yield
+    print("Shutting down")
 
-# Остальной код без изменений...
+app = FastAPI(
+    title="Bookstore API",
+    description="API для управления книгами и категориями",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
-def main():
-    db = SessionLocal()
-    
-    # Получаем категории
-    categories = get_categories(db)
-    
-    print("=== КАТАЛОГ КНИГ ===\n")
-    
-    for category in categories:
-        print(f"Категория: {category.title}")
-        print("-" * 30)
-        
-        books = get_books_by_category(db, category.id)
-        
-        if books:
-            for book in books:
-                print(f"  📖 Название: {book.title}")
-                print(f"    Описание: {book.description}")
-                print(f"    Цена: {book.price} руб.")
-                print(f"    Ссылка: {book.url if book.url else 'нет'}")
-                print()
-        else:
-            print("  В этой категории пока нет книг")
-        
-        print()
-    
-    db.close()
+# Подключаем роутеры
+app.include_router(categories.router)
+app.include_router(books.router)
 
-if __name__ == "__main__":
-    main()
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to Bookstore API"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "message": "API is running"}
